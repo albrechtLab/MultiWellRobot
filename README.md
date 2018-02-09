@@ -1,4 +1,4 @@
-# Published
+# File configuration steps
 Published MicroManager and Arduino Scripts
 
 Recommended steps for independent/modular robot automation:
