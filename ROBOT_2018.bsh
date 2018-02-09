@@ -1,0 +1,347 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.util.*;
+import java.io.*;
+import java.net.*;
+import net.miginfocom.swing.MigLayout;
+import java.awt.EventQueue;
+import org.micromanager.api.AcquisitionOptions;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import ij.process.*;
+import ij.ImagePlus;
+import ij.io.FileSaver;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Scanner;
+
+gui.closeAllAcquisitions();
+
+global.vport = mmc.getProperty("ArduinoValveControl", "ShowPort");
+try {
+	global.rport = mmc.getProperty("MicrowellPlateRobot", "ShowPort");
+	robotExists = true; 
+}
+catch (e) {
+	robotExists = false;
+}
+
+////////////////////////////
+//  Functions
+
+// Serial write
+serialWrite( String portName, String command) 
+{
+	mmc.setSerialPortCommand(portName, command, "/r");
+	mmc.sleep(1500);
+}
+
+// Create Info Window
+createInfoWindow( String windowName)
+{
+	if (f4 != void) {
+		f4.dispatchEvent(new WindowEvent(f, WindowEvent.WINDOW_CLOSING));
+	}
+	
+	f4 = new JFrame( windowName );
+	f4.setBounds(200,100,200,200);
+	cp4 = f4.getContentPane(); 
+	cp4.setLayout(new MigLayout()); 
+	f4.setSize(200, 500);
+	f4.setLocation(1250, 300);
+	f4.setResizable(false);
+	global.textArea = new JTextArea(20, 40);
+	textArea.setEditable(false);
+	//SUMMARY WINDOW PRINT SETTINGS
+	textArea.setText("");
+	JLabel = summarylbl = new JLabel("Acquisition Status");
+	summarylbl.setForeground(Color.BLUE);
+	summarylbl.setFont(new Font("Serif",Font.BOLD,14));
+	global.abort = new JButton("s"); // Abort does not work, changed to time temporarily
+	abort.addActionListener(this);
+	cp4.add(summarylbl, "gapbottom 1, span, split 2, aligny center");
+	cp4.add(new JSeparator(),"gapleft rel,growx");
+	cp4.add(abort);
+	cp4.add(textArea);
+	JScrollPane scroll = new JScrollPane (textArea, 
+  		JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+	cp4.add(scroll);
+	f4.pack(); 
+	f4.show();
+	return f4;
+}
+
+// Display info
+displayInfo( String info)
+{
+	print(info);
+	if (textArea != void) {
+		textArea.append(info+"\n");
+		f4.pack(); 
+		f4.show();
+	}
+}
+
+// Move to microwell position
+String moveToMicrowellPosition( String nextWell ) 
+{
+
+	serialWrite(vport, "v2off"); // Close outflow valve
+	serialWrite(vport, "v3on"); // Open backflow valve
+	mmc.sleep(1000); // can be 5000
+	
+	String[] wellList = nextWell.split(",");
+	for (int i = 0; i < wellList.length; i++) {
+  		nextWell = wellList[i];
+  
+		// Move to new well
+		mmc.setSerialPortCommand(rport, nextWell, "\r"); 
+	}
+
+	serialWrite(vport, "v3off"); // Close backflow
+   mmc.sleep(1000);
+
+	return nextWell;
+} 
+
+// Make new directory
+void mkDir(String path) {
+   p = new File(path);
+   if ( p.mkdirs() ) {
+     gui.message("Created " + path);
+     }
+   else {
+     gui.message("Can't make directory " + path);
+     }
+}
+
+// Move to multiple microwell positions
+moveToPositionList( String controlString, String delaySec)
+{
+
+	String[] positionList = controlString.split(";");
+	String[] delayList = delaySec.split(",");
+
+	// Display position list
+	for (int i = 0; i < positionList.length; i++) {
+  		String nextString = positionList[i];
+  		String nextDelay = delayList[i];
+		print( "" + (i+1) + ": " + nextString + " , delay: " + nextDelay);
+	}
+	
+	for (int i = 0; i < positionList.length; i++) {
+  		String nextString = positionList[i];
+  		int currentDelay = Integer.parseInt(delayList[i]);
+  		int frameCount = (currentDelay*10);
+  		moveToMicrowellPosition(nextString);
+
+  		//int intguiacqspeed = 0;
+		//acq.setFrames(frameCount,intguiacqspeed);
+		
+		// if need to stay in well for >45s (incubation not a wash), shut off waste to conserve volume, otherwise just wash
+/*	   if (currentDelay >= 45) {
+			mmc.sleep(120*1000);
+			serialWrite(vport, "v2off");
+		} else {
+			serialWrite(vport, "v2on");
+		}
+*/		
+
+		if (currentDelay <= 0) {
+			serialWrite(vport, "v2off");
+			serialWrite(vport, "v3on");
+		} else {
+			serialWrite(vport, "v2on");
+/*
+			// Create experiment folder
+			guisavepath = "H:\\tmp";
+			String ExpDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date()); //file date time
+			String MMfolder = guisavepath+"/Experiment_"+ExpDate;
+			mkDir(MMfolder);
+*/
+			//f4 = createInfoWindow("Experiment Progress");
+			
+			//String currentTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()); 
+			//displayInfo("Well "+nextString+", for "+currentDelay+"s, start:    " +currentTime);
+			
+			//See: https://valelab.ucsf.edu/trac/micromanager/browser/scripts/BurstExample.bsh
+
+			gui.openAcquisition("well_"+nextString+"_for_"+currentDelay+"s", "H:/tmp", frameCount, 1, 1, 1, true, true);
+			
+			width = (int) mmc.getImageWidth();
+			height = (int) mmc.getImageHeight();
+			bytesPerPixel = (int) mmc.getBytesPerPixel();
+			bitDepth = (int) mmc.getImageBitDepth();
+			
+			gui.initializeAcquisition("well_"+nextString+"_for_"+currentDelay+"s", width, height, bytesPerPixel, bitDepth);	
+			
+			mmc.startSequenceAcquisition(frameCount, 0, true);
+			frame = 0;
+			exposureMs = mmc.getExposure();
+			while (mmc.getRemainingImageCount() > 0 || mmc.isSequenceRunning(mmc.getCameraDevice())) {
+				if (mmc.getRemainingImageCount() > 0) {
+					img = mmc.popNextTaggedImage();
+					gui.addImageToAcquisition("well_"+nextString+"_for_"+currentDelay+"s", frame, 0, 0, 0, img);
+					frame++;
+			}
+			else {
+				mmc.sleep(Math.min(0.5 * exposureMs, 20));
+				}
+			}
+		
+			mmc.stopSequenceAcquisition();
+			gui.getAcquisition("well_"+nextString+"_for_"+currentDelay+"s").promptToSave(false);
+			gui.closeAcquisitionWindow("well_"+nextString+"_for_"+currentDelay+"s");
+/*
+			// Move file to experiment folder
+			String filename = "well_"+nextString+"_for_"+currentDelay+"s";
+			String oldfile = guisavepath+"/"+filename+"/MMStack_Pos0.ome.tif";
+			String newfile = MMfolder+"/"+filename+".tif";
+			
+			print("Moving "+oldfile+" to "+newfile);
+			mv(oldfile,newfile); // move file
+			oldfolder = new File(guisavepath+"/"+filename);
+			if (oldfolder.delete()) {
+				print("deleted folder");
+			} else {
+				print("could not delete folder");
+			}
+*/
+			//String currentTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()); //file date time
+			//displayInfo("Well "+nextString+", for "+currentDelay+"s, end:      " +currentTime);
+			
+			//mmc.sleep(currentDelay*1000);
+			serialWrite(vport, "v2off"); // Open outflow valve
+		}
+	}
+}
+
+//////////////////// End functions /////////////////
+
+
+	if (f3 != void) {
+		f3.dispatchEvent(new WindowEvent(f3, WindowEvent.WINDOW_CLOSING));
+	}
+	
+	f3 = new JFrame("Serial Panel");
+	
+	f3.setBounds(200,100,733,533);
+	cp3 = f3.getContentPane(); 
+	cp3.setLayout(new MigLayout("ins 20", "[para]0[][1001p,fill][601p][951p,fill]")); 
+	f3.setSize(500, 500);
+	f3.setLocation(800, 500);
+	f3.setResizable(true);
+
+	JButton valve1on = new JButton("Valve 1: ON");
+	JButton valve1off = new JButton("Valve 1: OFF");
+	JButton valve2on = new JButton("Valve 2: ON");
+	JButton valve2off = new JButton ("Valve 2: OFF");
+	JButton valve3on = new JButton("Valve 3: ON");
+	JButton valve3off = new JButton ("Valve 3: OFF");
+ 	JButton sendCommandValve = new JButton ("Send (Valve)");
+	
+	valve1on.setPreferredSize(new Dimension(95,20));
+	valve1off.setPreferredSize(new Dimension(95,20));
+	valve2on.setPreferredSize(new Dimension(95,20));
+	valve2off.setPreferredSize(new Dimension(95,20));
+	valve3on.setPreferredSize(new Dimension(95,20));
+	valve3off.setPreferredSize(new Dimension(95,20));
+	sendCommandValve.setPreferredSize(new Dimension(95,20));
+
+	serialString = new JFormattedTextField("");
+	serialString.setColumns(23);
+
+	valve1on.addActionListener(this);
+	valve1off.addActionListener(this);
+	valve2on.addActionListener(this);
+	valve2off.addActionListener(this);
+	valve3on.addActionListener(this);
+	valve3off.addActionListener(this);
+	sendCommandValve.addActionListener(this);
+			
+	cp3.add(valve1on,"cell 0 1");
+	cp3.add(valve1off,"cell 1 1");
+	cp3.add(valve2on,"cell 0 2");
+	cp3.add(valve2off,"cell 1 2, wrap");
+	cp3.add(valve3on,"cell 0 3");
+	cp3.add(valve3off,"cell 1 3, wrap");
+
+	cp3.add(serialString,"span 2, wrap");
+	cp3.add(sendCommandValve);
+
+	if (robotExists) {
+		JButton sendCommandRobot = new JButton ("Send (Robot)");
+		sendCommandRobot.setPreferredSize(new Dimension(95,20));
+		sendCommandRobot.addActionListener(this);
+		cp3.add(sendCommandRobot,"wrap 20");
+
+		/// All this new for multiwell plate
+
+		cp3.add(new JLabel("Multiwell Plate"));
+		cp3.add(new JSeparator(),"growx, wrap");
+	
+		JButton home = new JButton("Home");	
+		JButton start = new JButton("Start");
+		home.setPreferredSize(new Dimension(95,20));
+		start.setPreferredSize(new Dimension(95,20));
+		home.addActionListener(this);
+		start.addActionListener(this);
+		cp3.add(home);
+		cp3.add(start,"wrap");
+		
+		cp3.add(new JLabel("Well Delay (s):"), "wrap");
+		delayString = new JFormattedTextField("5,10,3");
+		delayString.setColumns(23);
+		cp3.add(delayString, "span, wrap 20");
+
+		cp3.add(new JLabel("Positions:"), "wrap");
+		multiwellString = new JFormattedTextField("A1-;A2-;A3-;");
+		multiwellString.setColumns(23);
+		cp3.add(multiwellString,"span 2, wrap 20");
+	}
+
+	f3.pack();
+	f3.show();
+	
+	
+	void actionPerformed(ActionEvent e) { 
+		if(e.getActionCommand() == "Valve 1: ON"){
+			mmc.setSerialPortCommand(vport, "v1on", "/r");
+		}
+		if(e.getActionCommand() == "Valve 1: OFF"){
+			mmc.setSerialPortCommand(vport, "v1off", "/r");
+		}
+		if(e.getActionCommand() == "Valve 2: ON"){
+			mmc.setSerialPortCommand(vport, "v2on", "/r");
+		}
+		if(e.getActionCommand() == "Valve 2: OFF"){
+			mmc.setSerialPortCommand(vport, "v2off", "/r");
+		}	
+		if(e.getActionCommand() == "Valve 3: ON"){
+			mmc.setSerialPortCommand(vport, "v3on", "/r");
+		}
+		if(e.getActionCommand() == "Valve 3: OFF"){
+			mmc.setSerialPortCommand(vport, "v3off", "/r");
+		}	
+		if(e.getActionCommand() == "Send (Valve)"){
+			String serialtext = serialString.getText();
+			mmc.setSerialPortCommand(vport, serialtext, "/r");
+		}
+		if(e.getActionCommand() == "Send (Robot)"){
+			String serialtext = serialString.getText();
+			mmc.setSerialPortCommand(rport, serialtext, "/r");
+		}
+		if(e.getActionCommand() == "Home"){
+			mmc.setSerialPortCommand(rport, "0", "/r");
+		}
+		if(e.getActionCommand() == "Start"){
+			String commandList = multiwellString.getText();
+			String delay = delayString.getText();
+			moveToPositionList(commandList,delay);
+		}
+	}
+		

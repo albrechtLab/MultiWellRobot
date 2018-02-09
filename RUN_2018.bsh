@@ -1,0 +1,543 @@
+////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Modified by Ross Lagoy for use with GUI_201609
+// ross.lagoy@gmai.com
+// Worcester Polytechnic Institute
+// Biomedical Engineering
+// 4.2.2017
+//
+////////////////////////////////////////////////////////////////////////////////////////////////
+//********************************************************************************************//
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import ij.process.*;
+import ij.ImagePlus;
+import ij.io.FileSaver;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Scanner;
+import net.miginfocom.swing.MigLayout;
+import org.micromanager.api.AcquisitionOptions; 
+
+print("");
+gui.closeAllAcquisitions();
+gui.clearMessageWindow();
+
+String goodguisavepath;
+String settingsFilename = "H:/User Defined Acquisition Settings.txt";
+SERIAL_WAIT = 1500; 		// Time to wait for serial communication (ms)
+int cycleCount = 1;      		   // number of cycles for number of wells above, minimum 1
+int cycleinterval = .5*60*1000;	// time between each cycle in ms, change the 1 to change number of min to wait
+
+////////////////////////////////////////////////////
+//    Functions 
+////////////////////////////////////////////////////
+
+// Read in text file for experiment information 
+String[] readTextInfo( String filename ) 
+{
+	String content = new Scanner(new File(filename)).useDelimiter("\\Z").next();
+	String[] extStr = content.split("\n");
+	String badsavepath = new String(extStr[9]);
+	goodguisavepath = badsavepath.trim();
+	String content = null;
+	File file = new File(settingsFilename);
+	FileReader reader = new FileReader(file);
+	char[] chars = new char[(int) file.length()];
+	reader.read(chars);
+	content = new String(chars);
+	reader.close();
+	
+	return content.split("\n");
+}
+
+// Create Info Window
+createInfoWindow( String windowName)
+{
+	if (f4 != void) {
+		f4.dispatchEvent(new WindowEvent(f, WindowEvent.WINDOW_CLOSING));
+	}
+	
+	f4 = new JFrame( windowName );
+	f4.setBounds(200,100,200,200);
+	cp4 = f4.getContentPane(); 
+	cp4.setLayout(new MigLayout()); 
+	f4.setSize(200, 500);
+	f4.setLocation(1250, 300);
+	f4.setResizable(false);
+	global.textArea = new JTextArea(20, 40);
+	textArea.setEditable(false);
+	//SUMMARY WINDOW PRINT SETTINGS
+	textArea.setText("");
+	JLabel = summarylbl = new JLabel("Acquisition Status");
+	summarylbl.setForeground(Color.BLUE);
+	summarylbl.setFont(new Font("Serif",Font.BOLD,14));
+	global.abort = new JButton("Abort");
+	abort.addActionListener(this);
+	cp4.add(summarylbl, "gapbottom 1, span, split 2, aligny center");
+	cp4.add(new JSeparator(),"gapleft rel,growx");
+	cp4.add(abort);
+	cp4.add(textArea);
+	JScrollPane scroll = new JScrollPane (textArea, 
+  		JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+	cp4.add(scroll);
+	f4.pack(); 
+	f4.show();
+	return f4;
+}
+
+// Make new directory
+void mkDir(String path) {
+   p = new File(path);
+   if ( p.mkdirs() ) {
+     gui.message("Created " + path);
+     }
+   else {
+     gui.message("Can't make directory " + path);
+     }
+}
+
+// set Filename
+String setFilename( int acqCounter, int stimNumber, int cycles)
+{
+	 if(acqCounter>9 && acqCounter<100){
+	 		movzerosa = "0";
+	 } else if (acqCounter>99){
+	 		movzerosa = "";
+	 } else {
+			movzerosa = "00";
+	 }
+
+ 	 if(cycles>9 && cycles<100){
+	 		movzerosb = "0";
+	 } else if (cycles>99){
+	 		movzerosb = "";
+	 } else {
+			movzerosb = "00";
+	 }
+
+	 if((stimNumber+1)>9 && (stimNumber+1)<100) {
+	 		movzerosc = "0";
+	 } else if ((stimNumber+1)>99){
+	 		movzerosc = "";
+	 } else {
+			movzerosc = "00";
+	 }
+	 
+	 String date = new SimpleDateFormat("yyyy-MM-dd-HH-mm_").format(new Date()); //file date time
+	 
+	 String filename = ("stream_"+date+"well"+movzerosc+(stimNumber+1)+"cycle"+movzerosb+cycles+"mov"+movzerosa+acqCounter);
+
+	 return filename;
+}
+
+// Serial write
+void serialWrite( String portName, String command) 
+{
+	mmc.setSerialPortCommand(portName, command, "/r");
+	mmc.sleep(SERIAL_WAIT);
+}
+
+// Display info
+displayInfo( String info)
+{
+	print(info);
+	if (textArea != void) {
+		textArea.append(info+"\n");
+		f4.pack(); 
+		f4.show();
+	}
+}
+
+
+//Run and Save Acquisition
+int streamAcquisitionAndSave( String guisavepath, String MMfolder, String filename, int intduration)
+{
+
+	// Display info
+	String currentTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()); //file date time
+	displayInfo("Acq. " + acqCounter + " start: " +currentTime);
+
+	 // LATEST -> gui.openAcquisition(acqName, rootDir, numFrames, nrCh, nrSlices, 
+	 //nrPos, show, save); 
+
+	 //See: https://valelab.ucsf.edu/trac/micromanager/browser/scripts/BurstExample.bsh
+	
+	gui.openAcquisition(filename, goodguisavepath, intduration, 1, 1, 1, true, true);
+	
+	width = (int) mmc.getImageWidth();
+	height = (int) mmc.getImageHeight();
+	bytesPerPixel = (int) mmc.getBytesPerPixel();
+	bitDepth = (int) mmc.getImageBitDepth();
+	
+	gui.initializeAcquisition(filename, width, height, bytesPerPixel, bitDepth);	
+	
+	mmc.startSequenceAcquisition(intduration, 0, true);
+	frame = 0;
+	exposureMs = mmc.getExposure();
+	while (mmc.getRemainingImageCount() > 0 || mmc.isSequenceRunning(mmc.getCameraDevice())) {
+	   if (mmc.getRemainingImageCount() > 0) {
+	      img = mmc.popNextTaggedImage();
+	      gui.addImageToAcquisition(filename, frame, 0, 0, 0, img);
+	      frame++;
+	   }
+	   else {
+	      mmc.sleep(Math.min(0.5 * exposureMs, 20));
+	   }
+	}
+	
+	mmc.stopSequenceAcquisition();
+   // Bide the time until acquisition ends before updating status
+   Thread.currentThread().sleep(2000); // Per multi_burst.bsh
+   acqRunning = gui.isAcquisitionRunning();
+   while(acqRunning) {
+       mmc.sleep(250);
+       acqRunning = gui.isAcquisitionRunning();
+
+       void actionPerformed(ActionEvent e) {   /// Abort button does not work!
+       	print(e.getActionCommand().subString(1,5));
+       	
+			if(e.getActionCommand().subString(1,5) == "Abort") {
+				print("Acquisition ABORTED");
+				Thread.stop();
+				return true;
+			}
+		}
+   }
+
+	// Close Current Video
+	gui.getAcquisition(filename).promptToSave(false);
+	gui.closeAcquisitionWindow(filename);
+
+	//Move file to experiment folder
+	String oldfile = guisavepath+"/"+filename+"/MMStack_Pos0.ome.tif";
+	String newfile = MMfolder+"/"+filename+".tif";
+	print("Moving "+oldfile+" to "+newfile);
+	mv(oldfile,newfile); // move file
+	oldfolder = new File(guisavepath+"/"+filename);
+	if (oldfolder.delete()) {
+		print("deleted folder");
+	} else {
+		print("could not delete folder");
+	}
+	
+	// Update display info once acquisition is complete
+	acqendtime = System.currentTimeMillis();
+	acqduration = acqendtime - firsttime;
+	String currentTime = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()); //file date time
+	displayInfo("Acq. " + acqCounter + " end:   " +currentTime);
+
+	return (int) acqduration;
+}
+
+
+// Wait for next trial (ms)
+void waitForNextTrial( int syswait)
+{
+			int syswaitSec = Math.floor(syswait/1000); // seconds to wait
+       	mmc.sleep(syswait - syswaitSec*1000);
+
+			displayInfo("Waiting " + syswaitSec + "s till next acquisition.");
+
+			for(t=syswaitSec; t>0; t--) 
+			{
+				mmc.sleep(1000);
+				
+				String waitString = "Abort "+(t-1);
+				abort.setText(waitString);
+
+				void actionPerformed(ActionEvent e) {  /// Abort button does not work!
+       			print(e.getActionCommand().subString(1,5));
+       	
+					if(e.getActionCommand().subString(1,5) == "Abort") {
+						print("Acquisition ABORTED");
+						Thread.stop();
+						return true;
+					}
+				}
+				
+			}
+			
+}
+
+void waitForNextCycle( int cycleinterval){
+			int syswaitSec = Math.floor(cycleinterval/1000); // seconds to wait
+       	mmc.sleep(cycleinterval - syswaitSec*1000);
+			displayInfo("Waiting " + syswaitSec + "s till next cycle.");
+			for(t=syswaitSec; t>0; t--) {
+				mmc.sleep(1000);		
+				String waitString = (t-1)+" s";
+				abort.setText(waitString);	
+			}		
+}
+
+// Serial write
+void serialWrite( String portName, String command) 
+{
+	mmc.setSerialPortCommand(portName, command, "\r");
+	mmc.sleep(SERIAL_WAIT);
+}
+
+
+// Move to microwell position
+String moveToMicrowellPosition( String nextWell ) 
+{
+
+	serialWrite(vport, "v2off"); // Close outflow valve
+	serialWrite(vport, "v3on"); // Open backflow valve
+	mmc.sleep(1000); //was 5000
+	
+	String[] wellList = nextWell.split(",");
+	for (int i = 0; i < wellList.length; i++) {
+  		nextWell = wellList[i];
+  
+		// Move to new well
+
+	print("Sending command: "+nextWell);
+		mmc.setSerialPortCommand(rport, nextWell, "\r"); 
+		
+	print("Waiting for movement");
+
+/*		if (nextWell.equals("0")) {
+			mmc.sleep(10000);		
+    } else {
+			mmc.sleep(1500);
+		}
+*/		
+   
+	mmc.sleep(1000); //was 1500
+	print("Done waiting.");
+
+	}
+
+	serialWrite(vport, "v3off"); // Close backflow
+	serialWrite(vport, "v2on"); // Open outflow valve
+	print("move complete");
+
+	return nextWell;
+} 
+
+// Move to multiple microwell positions
+moveToPositionList( String controlString, int delaySec ) 
+{
+
+	String[] positionList = controlString.split(";");
+
+	// Display position list
+	for (int i = 0; i < positionList.length; i++) {
+  		String nextString = positionList[i];
+		print( "" + (i+1) + ": " + nextString );
+	}
+
+	for (int i = 0; i < positionList.length; i++) {
+  		String nextString = positionList[i];
+		mmc.setSerialPortCommand(rport, nextString, "\r");
+
+		for (int j = 0; j < delaySec; j++) {
+			mmc.sleep(1000);
+		}
+	}
+}
+
+
+
+////////////////////////////////////////////////////
+//
+//    START OF MAIN SCRIPT
+//
+////////////////////////////////////////////////////
+
+// Look for text file created by GUI script, extract variables
+fromfile = readTextInfo("H:/User Defined Acquisition Settings.txt");
+
+// Parse experiment info
+guiexperimenttype = fromfile[0].trim();
+guiexposure = fromfile[1];
+guibinning = fromfile[2];
+guitrigp = fromfile[3];
+guitrigd = fromfile[4];
+double guiacqspeed = Double.parseDouble(fromfile[5]);
+int intguiacqspeed = guiacqspeed.intValue();
+double guitrials = Double.parseDouble(fromfile[6]);
+double guitrialduration = Double.parseDouble(fromfile[7]);
+int intduration = guitrialduration.intValue();
+double guitrialints = Double.parseDouble(fromfile[8]);
+int inttrialinterval = guitrialints.intValue();
+guisavepath = fromfile[9];
+guicommand = fromfile[10];
+
+print(guicommand); 
+
+// If Multi-Stimulus Experiment extract MultiStim Variables
+if(guiexperimenttype.equals("Multi-Stimulus"))
+{
+	double guistimints = Double.parseDouble(fromfile[12]);
+	int intstiminterval = guistimints.intValue();
+	guistimcommand=fromfile[11];
+	global.stimulusinterval=intstiminterval*1000;
+}
+print("");
+
+
+//////////////////////////////////////////////////////////////////////
+// Configuration variables.
+//////////////////////////////////////////////////////////////////////
+acq.setFrames(intduration,intguiacqspeed);
+TOTAL_TRIALS = guitrials; 		// Total time for acquisition.
+INTERVAL_SEC = guitrialints;	// Time between acquisitions
+
+//Port for serial commands
+global.vport = mmc.getProperty("ArduinoValveControl", "ShowPort");
+try {
+	global.rport = mmc.getProperty("MicrowellPlateRobot", "ShowPort");
+	robotExists = true; 
+}
+catch (e) {
+	robotExists = false;
+}
+
+
+
+
+//####################################################################################
+//////////////////////////////////////////////////////////////////////////////////////
+/** MAIN LOOP FOR SINGLE STIMULUS REPEAT ACQUISTIONS */
+//////////////////////////////////////////////////////////////////////////////////////
+//####################################################################################
+
+if(guiexperimenttype.equals("Single-Stimulus")) {
+
+// Create info window
+f4 = createInfoWindow("Experiment Progress (Single-Stimulus)");
+
+// Create experiment folder
+	guisavepath = "H:\\tmp";
+	String ExpDate = new SimpleDateFormat("yyyy-MM-dd-HH-mm").format(new Date()); //file date time
+	String MMfolder = guisavepath+"/Experiment_"+ExpDate;
+	mkDir(MMfolder);
+	cp(settingsFilename, MMfolder+"/Experiment_"+ExpDate+"_settings.txt"); 
+
+// Make sure valve 2 is open
+serialWrite(vport, "v2on");
+
+for (int cycles = 1; cycles <= cycleCount; cycles++) {
+	for (int stimNumber = 0; stimNumber < 1; stimNumber++) {
+		for (int acqCounter =1;acqCounter<= TOTAL_TRIALS; acqCounter++)
+		{
+		   // Actions to run if the loop was run more than once.
+		   // Wait for user defined time before running next acquisition.
+		   if (acqCounter > 1) {
+		   	syswait = (INTERVAL_SEC * 1000 - acqduration - 3);
+		      waitForNextTrial( (int) syswait);
+		   }
+		
+			// get time at start of cycle
+			firsttime = System.currentTimeMillis();
+		
+		   // Reset Arduino counter and program
+			serialWrite(vport, guicommand);
+		
+			// Set filename and acquire stream
+			filename = setFilename( acqCounter, stimNumber, cycles);
+			acqduration = streamAcquisitionAndSave(guisavepath, MMfolder, filename, intduration);
+		
+		} // End - Main loop.
+	}
+}
+
+mmc.sleep(1000);
+
+// Close outflow valve
+serialWrite(vport, "v2off");
+displayInfo("Closed Outflow Valve "+"\n*** End of Script ***");
+
+}  // End loop for single stimulus
+
+
+
+//####################################################################################
+//////////////////////////////////////////////////////////////////////////////////////
+//####################################################################################
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//////////////////////////////////////////////////////////////////////////////////////
+/** MAIN LOOP FOR MULTIPLE STIMULUS REPEAT ACQUISTIONS */
+//////////////////////////////////////////////////////////////////////////////////////
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if(guiexperimenttype.equals("Multi-Stimulus"))
+{
+	// Create info window
+	f4 = createInfoWindow("Experiment Progress (Multi-Stimulus)");
+
+	// Determine microwell position list and display
+	String[] positionList = guistimcommand.split(";");
+	displayInfo("Microwell position commands");
+	for (int i = 0; i < positionList.length; i++) {
+  		String nextString = positionList[i];
+		displayInfo( "" + (i+1) + ": " + nextString );
+	}
+
+	// Create experiment folder
+	guisavepath = "H:\\tmp";
+	String ExpDate = new SimpleDateFormat("yyyy-MM-dd-HH-mm").format(new Date()); //file date time
+	String MMfolder = guisavepath+"/Experiment_"+ExpDate;
+	mkDir(MMfolder);
+	cp(settingsFilename, MMfolder+"/Experiment_"+ExpDate+"_settings.txt"); 
+	
+	// BIG LOOP FOR EACH STIMULUS
+	//-------------------------------------------------------------------------------------------
+	for (int cycles = 1; cycles <= cycleCount; cycles++) {
+		for (int stimNumber = 0; stimNumber < positionList.length; stimNumber++) {
+	  		
+	  		// Switch stimuli
+	  		String nextString = positionList[stimNumber];
+			String currentPosition = moveToMicrowellPosition(nextString);
+			displayInfo("Moved to position: "+currentPosition);
+	
+			// Delay for next stimulus
+			waitForNextTrial( (int) stimulusinterval);
+			
+			// For each stimulus, run trials
+			for (acqCounter=1; acqCounter<= TOTAL_TRIALS; acqCounter++)
+			{
+	   		// Actions to run if the loop was run more than once.
+	   		// Wait for user defined time before running next acquisition.
+	   		if (acqCounter > 1) {
+	   			syswait = (INTERVAL_SEC * 1000 - acqduration - 3);
+	      		waitForNextTrial( (int) syswait);
+	   		}
+	
+				// get time at start of cycle
+				firsttime = System.currentTimeMillis();
+	
+	   		// Reset Arduino counter and program
+				serialWrite(vport, guicommand);
+				serialWrite(vport, "v2on");
+	
+				// Set filename and acquire stream
+				filename = setFilename( acqCounter, stimNumber, cycles);
+				acqduration = streamAcquisitionAndSave(guisavepath, MMfolder, filename, intduration);
+	
+			} // End - repeated trials per stimulus loop.
+	
+		} // End - stimulus loop.
+
+		mmc.sleep(1000);
+		
+		// Delay between cycles
+		waitForNextCycle( (int) cycleinterval);	
+	
+	}  // End loop for multiple cycles
+	
+	// Close outflow valve
+	serialWrite(vport, "v2off");
+	displayInfo("Closed Outflow Valve "+"\n*** End of Script ***");
+
+}  // End loop for multiple stimuli
+
+/////////////////

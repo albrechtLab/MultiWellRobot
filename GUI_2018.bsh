@@ -1,0 +1,1063 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import java.util.*;
+import java.io.*;
+import java.net.*;
+import org.micromanager.api.AcquisitionOptions;
+import net.miginfocom.swing.MigLayout;
+import ij.process.*;
+import ij.ImagePlus;
+import ij.io.FileSaver;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.awt.EventQueue;
+
+////////////////////////////////////////////////////////////////////////////////////
+//Set-up GUI, Component Definitions
+////////////////////////////////////////////////////////////////////////////////////
+gui.closeAllAcquisitions();
+gui.clearMessageWindow();
+SERIAL_WAIT = 3000;
+global.gotcommand = false;
+global.stimchangevalid=true;
+SAVE_TO_RAM = true;
+global.otherload = 0;
+f = new JFrame("Acquistion Settings");
+
+global.vport = mmc.getProperty("ArduinoValveControl", "ShowPort");
+try {
+	global.rport = mmc.getProperty("MicrowellPlateRobot", "ShowPort");
+	robotExists = true; 
+}
+catch (e) {
+	robotExists = false;
+}
+f.setBounds(200,100,733,533);
+
+
+cp = f.getContentPane(); 
+cp.setLayout(new MigLayout("ins 20", "[para]0[][1001p,fill][601p][951p,fill]")); 
+
+f.setSize(500, 500);
+f.setLocation(700, 300);
+f.setResizable(false);
+
+//Drop down menu choice lists and corresponding values
+String[] choices = {"50 to 150","50 to 100","100 to 200","Other"};
+
+String[] binchoices = {"1x1","2x2","4x4"}; 
+//{"Every 10", "Every 50", "Every 100"};
+String[] expvalues = {"50,150","50,100","100,200","Other"};
+String[] binvalues = {"1x1","2x2","4x4"}; 
+//{"10,20,30,40,50","50,100,150,200,250","100,200,300,400"};
+
+
+//////////////////////////////////////////////////////////////////////////////
+//JBUTTONS
+//////////////////////////////////////////////////////////////////////////////
+
+
+//button, list and input definitions
+JButton start = new JButton("Apply");
+JButton stop = new JButton("Reset Valves");
+JButton save = new JButton("Save Settings");
+JButton loadsettings = new JButton ("Load Settings");
+JButton getdir = new JButton("...");
+JButton getstimswitch  = new JButton("Get Command");
+JButton getpattern = new JButton("Load Pattern");
+getstimswitch.setPreferredSize(new Dimension(103,20));
+getpattern.setPreferredSize(new Dimension(103,20));
+getdir.setPreferredSize(new Dimension(103,20));
+start.setPreferredSize(new Dimension(103,20));
+stop.setPreferredSize(new Dimension(103,20));
+save.setPreferredSize(new Dimension(103,20));
+loadsettings.setPreferredSize(new Dimension(103,20));
+JButton update = new JButton("Update");
+update.setPreferredSize(new Dimension(103,20));
+
+
+JComboBox exptype = new JComboBox(choices);
+JComboBox bintype = new JComboBox(binchoices);
+exptype.setPreferredSize(new Dimension(103,20));
+bintype.setPreferredSize(new Dimension(103,20));
+bintype.setSelectedItem(binchoices[1]);
+
+input = new JFormattedTextField("100.0");
+input.setColumns(12);
+
+trigdinput = new JFormattedTextField("5.0");
+trigdinput.setColumns(12);
+
+trigpinput = new JFormattedTextField("10.0");
+trigpinput.setColumns(12);
+
+fpsinput = new JFormattedTextField("0");
+fpsinput.setColumns(12);
+
+trialinput = new JFormattedTextField("2");
+trialinput.setColumns(12);
+
+
+triallengthinput = new JFormattedTextField("300");
+triallengthinput.setColumns(12);
+
+trialintinput = new JFormattedTextField("60");
+trialintinput.setColumns(12);
+
+stimintinput = new JFormattedTextField("30");
+stimintinput.setColumns(12);
+ 
+
+directoryinput = new JFormattedTextField("H:\\tmp");
+directoryinput.setColumns(35);
+directoryinput.setEditable(false);
+
+
+////////////////////////////////////////////////////////////////////////////
+//JLABELS
+////////////////////////////////////////////////////////////////////////////
+
+JLabel = setexposure = new JLabel("Exposure [ms]:");
+JLabel = explabel = new JLabel("Stimulus Pulse [fr]:");
+JLabel = setbinning = new JLabel("Binning:");
+JLabel = trigdlbl = new JLabel("Trigger Delay [ms]:");
+JLabel = stimswitchlbl =  new JLabel("Stimulus Change: ");
+JLabel = stimintlbl = new JLabel("Stimulus Interval [s]: ");
+
+JLabel = settingslbl = new JLabel("Camera Settings");
+settingslbl.setForeground(Color.BLUE);
+settingslbl.setFont(new Font("Serif",Font.BOLD,14));
+
+JLabel = experimenttypelbl = new JLabel("Experiment Type");
+experimenttypelbl.setForeground(Color.BLUE);
+experimenttypelbl.setFont(new Font("Serif",Font.BOLD,14));
+
+JLabel = expsetlbl = new JLabel("Experiment Settings");
+expsetlbl.setForeground(Color.BLUE);
+expsetlbl.setFont(new Font("Serif",Font.BOLD,14));
+
+JLabel = saverlbl = new JLabel("Save Directory");
+saverlbl.setForeground(Color.BLUE);
+saverlbl.setFont(new Font("Serif",Font.BOLD,14));
+
+JLabel = trigplbl = new JLabel("Trigger Period [ms]:");
+JLabel = framelbl = new JLabel("Acq. Speed [ms/fr]:");
+JLabel = triallbl = new JLabel("# of Trials:");
+JLabel = trialintlbl = new JLabel("Trial Interval [s]:");
+JLabel = directorylbl = new JLabel("Select Dir: ");
+JLabel = triallenglbl = new JLabel("Trial Length [fr]:");
+JSeparator separator0 = new JSeparator();
+JSeparator separator = new JSeparator();
+JSeparator separator2 = new JSeparator();
+JSeparator separator3 = new JSeparator();
+
+///////////////////////////////////////////////////////////////////
+//JRADIOBUTTONS
+///////////////////////////////////////////////////////////////////
+
+JRadioButton a,b,c;
+ButtonGroup buttonGroup = new ButtonGroup();
+a = new JRadioButton("Single-Stimulus");
+b = new JRadioButton("Multi-Stimulus");
+c = new JRadioButton("Multi-Pattern");
+buttonGroup.add(a);
+buttonGroup.add(b);
+buttonGroup.add(c);
+a.setSelected(true);
+
+////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////
+//ACTION LISTENERS
+////////////////////////////////////////////////////////////////////
+start.addActionListener(this);
+stop.addActionListener(this);
+save.addActionListener(this); 
+exptype.addActionListener(this);
+input.addActionListener(this);
+bintype.addActionListener(this);
+trigdinput.addActionListener(this);
+trigpinput.addActionListener(this);
+fpsinput.addActionListener(this);
+trialinput.addActionListener(this);
+trialintinput.addActionListener(this);
+getdir.addActionListener(this);
+loadsettings.addActionListener(this);
+a.addActionListener(this);
+b.addActionListener(this);
+c.addActionListener(this);
+update.addActionListener(this);
+getstimswitch.addActionListener(this);
+getpattern.addActionListener(this);
+
+/////////////////////////////////////////////////////////////////////
+//ADD COMPONENTS TO THE JFRAME FOR INITIAL START UP
+/////////////////////////////////////////////////////////////////////
+
+//GUI SECTION 1 (CAMERA SETTINGS)
+cp.add(settingslbl, "gapbottom 1, span, split 2, aligny center");
+cp.add(new JSeparator(),"gapleft rel,growx");
+
+cp.add(setexposure);
+cp.add(input,"split 1");
+
+cp.add(setbinning);
+cp.add(bintype, "wrap");
+
+cp.add(trigplbl);
+cp.add(trigpinput);
+
+cp.add(framelbl);
+cp.add(fpsinput, "wrap");
+			
+cp.add(trigdlbl);
+cp.add(trigdinput, "wrap 10");
+
+//GUI SECTION 2 (EXPERIMENT TYPE)
+cp.add(experimenttypelbl, "gapbottom 1, span, split 2, aligny center");
+cp.add(new JSeparator(),"gapleft rel,growx");
+
+cp.add(a,"wrap");
+cp.add(b,"wrap");
+cp.add(c,"wrap 10");
+
+//GUI SECTION 3 (EXPERIMENT SETTINGS)
+cp.add(expsetlbl, "gapbottom 1, span, split 2, aligny center");
+cp.add(new JSeparator(),"gapleft rel,growx");
+cp.add(explabel); 
+cp.add(exptype); 
+
+cp.add(triallenglbl);
+cp.add(triallengthinput,"wrap");
+cp.add(triallbl);
+cp.add(trialinput);
+cp.add(trialintlbl);
+cp.add(trialintinput,"wrap 10");
+
+
+//GUI SECTION 4 (SAVE INFORMATION AND APPLY SETTINGS)
+cp.add(saverlbl, "gapbottom 1, span, split 2, aligny center");
+cp.add(new JSeparator(),"gapleft rel,growx");
+cp.add(directoryinput,"span 4");
+cp.add(getdir,"cell 3 12,wrap 15");
+cp.add(new JSeparator(),"gapleft rel,span 4,growx,wrap 10");
+cp.add(start,"al left, cell 0 15");
+cp.add(stop,"al left, cell 1 15");
+cp.add(loadsettings, "cell 2 15");
+cp.add(save,"al left, cell 3 15");
+
+f.pack(); 
+f.show(); 
+
+//default values of dropdown lists
+command= expvalues[0];
+binning= binchoices[1];
+initializex = a.getText();
+
+//-----------------------------------------------------------------------------
+///////////////////////////////////////////////////////////////////////////////
+//Action commands based on user selection
+///////////////////////////////////////////////////////////////////////////////
+//-----------------------------------------------------------------------------
+
+
+//Update GUI Components based on user selection of experiment type
+
+void actionPerformed(ActionEvent e) { 
+
+		if(a.isSelected()){
+			initializex = a.getText();
+		}
+
+		if(b.isSelected()){
+			initializex = b.getText();
+		}
+
+		if(c.isSelected()){
+			initializex = c.getText();
+		}
+	
+///////////////////////////////////////
+// SINGLE-STIMULUS GUI SET-UP
+//////////////////////////////////////
+
+		if(initializex == "Single-Stimulus"){
+			cp.removeAll();
+			cp.add(settingslbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(setexposure);
+			cp.add(input,"split 1");
+			
+			cp.add(setbinning);
+			cp.add(bintype, "wrap");
+			
+			cp.add(trigplbl);
+			cp.add(trigpinput);
+
+			cp.add(framelbl);
+			cp.add(fpsinput, "wrap");
+			
+			cp.add(trigdlbl);
+			cp.add(trigdinput, "wrap 10");
+			
+			
+			cp.add(experimenttypelbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(a,"wrap");
+			cp.add(b,"wrap");
+			cp.add(c,"wrap 10");
+
+			cp.add(expsetlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(explabel); 
+			cp.add(exptype); 
+
+			cp.add(triallenglbl);
+			cp.add(triallengthinput,"wrap");
+			cp.add(triallbl);
+			cp.add(trialinput);
+			cp.add(trialintlbl);
+			cp.add(trialintinput,"wrap 10");
+
+			cp.add(saverlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(directoryinput,"span 4");
+			cp.add(getdir,"cell 3 12,wrap 15");
+			cp.add(new JSeparator(),"gapleft rel,span 4,growx,wrap 10");
+			cp.add(start,"al left, cell 0 15");
+			cp.add(stop,"al left, cell 1 15");
+			cp.add(loadsettings, "cell 2 15");
+			cp.add(save,"al left, cell 3 15");
+			
+			cp.revalidate();
+			cp.repaint();
+		}
+////////////////////////////////////////
+// MULTI-STIMULUS GUI SET-UP
+///////////////////////////////////////
+
+		if(initializex == "Multi-Stimulus"){
+			cp.removeAll();
+			cp.add(settingslbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(setexposure);
+			cp.add(input,"split 1");
+			
+			cp.add(setbinning);
+			cp.add(bintype, "wrap");
+			
+			cp.add(trigplbl);
+			cp.add(trigpinput);
+			
+			cp.add(framelbl);
+			cp.add(fpsinput, "wrap");
+			
+			cp.add(trigdlbl);
+			cp.add(trigdinput, "wrap 5");
+			
+			cp.add(experimenttypelbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(a,"wrap");
+			cp.add(b,"wrap");
+			cp.add(c,"wrap 5");
+
+			cp.add(expsetlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(explabel); 
+			cp.add(exptype); 
+
+			cp.add(triallenglbl);
+			cp.add(triallengthinput,"wrap");
+			cp.add(stimswitchlbl);
+			cp.add(getstimswitch);
+			cp.add(trialintlbl);
+			cp.add(trialintinput,"wrap");
+			cp.add(stimintlbl);
+			cp.add(stimintinput);
+			cp.add(triallbl);
+			cp.add(trialinput,"wrap 5");
+			
+			cp.add(saverlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(directoryinput,"span 4");
+			cp.add(getdir,"cell 3 13,wrap 10");
+			cp.add(new JSeparator(),"gapleft rel,span 4,growx,wrap 10");
+			cp.add(start,"al left, cell 0 15");
+			cp.add(stop,"al left, cell 1 15");
+			cp.add(loadsettings, "cell 2 15");
+			cp.add(save,"al left, cell 3 15");
+			cp.revalidate();
+			cp.repaint();
+			
+		}
+//////////////////////////////////////
+// MULTI-PATTERN GUI SET-UP
+//////////////////////////////////////
+
+		if(initializex == "Multi-Pattern"){
+			cp.removeAll();
+			cp.add(settingslbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(setexposure);
+			cp.add(input,"split 1");
+			
+			cp.add(setbinning);
+			cp.add(bintype, "wrap");
+			
+			cp.add(trigplbl);
+			cp.add(trigpinput);
+			
+			cp.add(framelbl);
+			cp.add(fpsinput, "wrap");
+			
+			cp.add(trigdlbl);
+			cp.add(trigdinput, "wrap 10");
+			
+			cp.add(experimenttypelbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			
+			cp.add(a,"wrap");
+			cp.add(b,"wrap");
+			cp.add(c,"wrap 10");
+
+			cp.add(expsetlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(explabel); 
+			cp.add(getpattern); 
+
+			cp.add(triallenglbl);
+			cp.add(triallengthinput,"wrap");
+			cp.add(triallbl);
+			cp.add(trialinput);
+			cp.add(trialintlbl);
+			cp.add(trialintinput,"wrap 10");
+			
+			cp.add(saverlbl, "gapbottom 1, span, split 2, aligny center");
+			cp.add(new JSeparator(),"gapleft rel,growx");
+			cp.add(directoryinput,"span 4");
+			cp.add(getdir,"cell 3 12,wrap 15");
+			cp.add(new JSeparator(),"gapleft rel,span 4,growx,wrap 10");
+			cp.add(start,"al left, cell 0 15");
+			cp.add(stop,"al left, cell 1 15");
+			cp.add(loadsettings, "cell 2 15");
+			cp.add(save,"al left, cell 3 15");
+			cp.revalidate();
+			cp.repaint();
+		}
+
+
+////////////////////////////////////////////////////////////////////////
+//Load in 96-well plate stimulus command
+////////////////////////////////////////////////////////////////////////
+	if(e.getActionCommand() == "Get Command"){
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		int openChoice = chooser.showOpenDialog(null);
+		if (openChoice == JFileChooser.APPROVE_OPTION){
+    		switchpath = chooser.getSelectedFile().getAbsolutePath();
+    		global.goodswitchpath = switchpath.replace("\\", "\\\\");
+				//read in from file
+			String switchcontent = null;
+			File switchfile = new File(goodswitchpath);
+			FileReader switchreader = new FileReader(switchfile);
+			char[] switchchars = new char[(int) switchfile.length()];
+			switchreader.read(switchchars);
+			switchcontent = new String(switchchars);
+			switchreader.close();
+			String[] switchfromfile = switchcontent.split("\n");
+			print("");
+			print("Multi-Stimulus Change Command:");
+			String switchresult = "";
+			if(switchfromfile.length>0){
+				switchresult = switchfromfile[0];
+				for (i=1;i<switchfromfile.length;i++){
+					switchresult = switchresult + ","+switchfromfile[i];
+				}
+			gotcommand = true;
+			}
+			print(switchresult);
+			global.switchcommand = switchresult;
+			}
+	}
+
+///////////////////////////////////////////////////////////////////////
+//Load in custom pattern command
+//This enables a user to use different stimulus pulses for different trials
+//////////////////////////////////////////////////////////////////////
+
+	if(e.getActionCommand() == "Load Pattern"){
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		int openChoice = chooser.showOpenDialog(null);
+		if (openChoice == JFileChooser.APPROVE_OPTION){
+    		patternpath = chooser.getSelectedFile().getAbsolutePath();
+    		print(patternpath);
+			}
+	}
+/////////////////////////////////////////////////////////////////////////
+//Get Pulse Command from drop down list
+//If other is selected prompt user for custom pulse
+/////////////////////////////////////////////////////////////////////////
+	if (e.getSource() == exptype){
+		command = expvalues[exptype.getSelectedIndex()]; 
+		if (command == "Other" && otherload == 0){
+			f2 = new JFrame("Single-Stimulus Pulse");
+			f2.setBounds(200,100,733,533);
+			cp2 = f2.getContentPane(); 
+			cp2.setLayout(new MigLayout("ins 20", "[para]0[][1001p,fill][601p][951p,fill]")); 
+			f2.setSize(500, 500);
+			f2.setLocation(800, 500);
+			f2.setResizable(false);
+			JLabel = customcommandlbl = new JLabel("Custom Command");
+			customcommandlbl.setForeground(Color.BLUE);
+			customcommandlbl.setFont(new Font("Serif",Font.BOLD,14));
+
+			otherinput = new JTextField("Enter String [On,Off]");
+			otherinput.setColumns(20);
+			otherlbl = new JLabel("Stimulus Pulse at:     ");
+			
+			okaybutton = new JButton("Okay");
+			cancelbutton = new JButton("Cancel");
+			okaybutton.setPreferredSize(new Dimension(95,20));
+			cancelbutton.setPreferredSize(new Dimension(95,20));
+			
+
+			cancelbutton.addActionListener(this);
+			okaybutton.addActionListener(this);
+			
+			cp2.add(customcommandlbl, "gapbottom 1, span, split 2, aligny center");
+			cp2.add(new JSeparator(),"gapleft rel,growx");
+			cp2.add(otherlbl);
+			cp2.add(otherinput,"wrap 15");
+
+			cp2.add(okaybutton,"center");
+			cp2.add(cancelbutton,"al right");
+			
+			
+			f2.pack();
+			f2.show();
+			void actionPerformed(ActionEvent e) { 
+				if(e.getActionCommand() == "Cancel"){
+					f2.dispose();
+				}
+				if(e.getActionCommand() == "Okay"){
+					pass=0;
+					checkinput = otherinput.getText();
+					String[] checkcommand = checkinput.split(",");
+					checklength = checkcommand.length -2;
+					
+					if(pass==0){
+						command = checkinput;
+						f2.dispose();
+					}
+				print(command);
+				}
+			}
+		}
+	}
+
+////////////////////////////////////////////////////////////////////////////////////
+//Get binning from drop down list
+///////////////////////////////////////////////////////////////////////////////////
+
+	if(e.getSource() == bintype){
+		binning = binvalues[bintype.getSelectedIndex()];
+	}
+
+///////////////////////////////////////////////////////////////////////////////////
+//Get the save path directory from a user for saving videos
+///////////////////////////////////////////////////////////////////////////////////
+
+	if(e.getActionCommand()== "..."){
+			JFileChooser chooser = new JFileChooser(directoryinput.getText());
+			chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);			
+			int openChoice = chooser.showOpenDialog(null);
+			if (openChoice == JFileChooser.APPROVE_OPTION){
+    			savepath = chooser.getSelectedFile().getAbsolutePath();
+				global.goodpath = savepath.replace("\\", "\\\\");
+    			directoryinput.setText(goodpath);
+    			directoryinput.setEditable(true);
+			}
+	}
+
+//////////////////////////////////////////////////////////////////////////////////
+//Save the displayed settings to a text file for quick access later
+//////////////////////////////////////////////////////////////////////////////////
+
+	if (e.getActionCommand() == "Save Settings"){
+		String exposuretext = input.getText();
+		String trigdtext = trigdinput.getText();
+		String trigptext = trigpinput.getText();
+		String trialtext = trialinput.getText();
+		String trialdurationtext = triallengthinput.getText();
+		String trialinttext = trialintinput.getText();
+		String acqtext = fpsinput.getText();
+		String savepathtext =directoryinput.getText();
+
+		/////////////////////////////////////////////////////////////////////////////
+		// catch if not all variables are filled in
+		////////////////////////////////////////////////////////////////////////////
+		valid = true;
+		try{
+		int acqspeed = Integer.parseInt(acqtext);
+		int trials = Integer.parseInt(trialtext);
+		int trialints = Integer.parseInt(trialinttext);
+		int trialduration = Integer.parseInt(trialdurationtext);
+		} catch(r){
+			valid = false;
+			print(valid);
+		}
+		int checksavepath = savepathtext.length();
+		int checkexposure = exposuretext.length();
+		int checktrigp = trigptext.length();
+		int checktrigd = trigdtext.length();
+		if (checksavepath<1){
+			valid = false;
+		}
+		if (checkexposure<1){
+			valid = false;
+		}
+		if (checktrigp<1){
+			valid = false;
+		}
+		if (checktrigd<1){
+			valid = false;
+		}
+			if(valid == false){
+				JOptionPane.showMessageDialog(null, "Missing Required Field.", "Error", JOptionPane.ERROR_MESSAGE);
+			}
+			// Approve user selection
+
+			if(valid == true){
+				int acqspeed = Integer.parseInt(acqtext);
+				int trials = Integer.parseInt(trialtext);
+				int trialints = Integer.parseInt(trialinttext);
+				int trialduration = Integer.parseInt(trialdurationtext);
+				
+				/////////////////////////////////////////////////////////////////////////
+				// Prompt User for Save location and Save file name
+				/////////////////////////////////////////////////////////////////////////
+
+				JFileChooser mySaveDialog = new JFileChooser(directoryinput.getText());
+				int saveChoice = mySaveDialog.showSaveDialog(null);
+				
+				if (saveChoice == JFileChooser.APPROVE_OPTION){
+					sfilepath = (mySaveDialog.getSelectedFile().getAbsolutePath()+".txt");
+				FileWriter fw = new FileWriter(sfilepath);
+				PrintWriter pw = new PrintWriter(fw);
+				pw.println(initializex);
+				pw.println(exposuretext);
+				pw.println(binning);
+				pw.println(trigptext);
+				pw.println(trigdtext);
+				pw.println(acqspeed);
+				pw.println(trials);
+				pw.println(trialduration);
+				pw.println(trialints);
+				pw.println(savepathtext);
+				pw.println(command);     
+				pw.close();
+				}
+				gui.clearMessageWindow();
+				print("");
+				print("SAVED!");
+				print("Valid Entry: "+valid);
+				print("ExpType: " +initializex);
+				print("Exposure: "+exposuretext);
+				print("Binning: "+ binning);
+				print("TriggerPeriod: " + trigptext);
+				print("TriggerDelay: " + trigdtext);
+				print("Acq.Speed: " +acqspeed);
+				print("ExperimentTrials: " +trials);
+				print("Trial Duration: " +trialduration);
+				print("TrialInt: "+trialints);
+				print("SaveDIR: "+ savepathtext);
+				print("Stimulus Cmd: " +command);
+				print("");
+				print("SwitchPath: "+command2);
+				print("PatternPath: "+goodpatternpath);
+		}
+	}
+
+//////////////////////////////////////////////////////////////////////////////////
+//Load in acquisition settings from file
+//////////////////////////////////////////////////////////////////////////////////
+
+	if (e.getActionCommand()=="Load Settings"){
+			JFileChooser chooser2 = new JFileChooser(directoryinput.getText());
+			chooser2.setFileSelectionMode(JFileChooser.FILES_ONLY);
+			int openChoice = chooser2.showOpenDialog(null);
+			if (openChoice == JFileChooser.APPROVE_OPTION){
+    			filepath = chooser2.getSelectedFile().getAbsolutePath();
+    			global.goodfilepath = filepath.replace("\\", "\\\\");
+				//read in from file
+				String content = null;
+				File file = new File(goodfilepath); //for ex foo.txt
+				FileReader reader = new FileReader(file);
+				char[] chars = new char[(int) file.length()];
+				reader.read(chars);
+				content = new String(chars);
+				reader.close();
+				String[] fromfile = content.split("\n");
+				loadexptype = fromfile[0].trim();
+				loadexposure = fromfile[1].trim();
+				loadbinning = fromfile[2].trim();
+				loadtrigp = fromfile[3].trim();
+				loadtrigd = fromfile[4].trim();
+				loadacqspeed = fromfile[5].trim();
+				loadtrials = fromfile[6].trim();
+				loadduration = fromfile[7].trim();
+				loadtrialint = fromfile[8].trim();
+				loadsavepath = fromfile[9].trim();
+				
+				input.setText(loadexposure);
+				trigpinput.setText(loadtrigp);
+				trigdinput.setText(loadtrigd);
+				fpsinput.setText(loadacqspeed);
+				trialinput.setText(loadtrials);
+				triallengthinput.setText(loadduration);
+				trialintinput.setText(loadtrialint);
+				directoryinput.setText(loadsavepath);
+				switchcommand = loadswitchcommand;
+				
+				//SET BUTTONS TO STATUS OF LOADED SETTINGS
+				if(loadexptype.equals("Single-Stimulus")){
+					a.setSelected(true);
+				}
+				if(loadexptype.equals("Multi-Stimulus")){
+					b.setSelected(true);
+					print("Error Loading Settings for Multi-Stim");
+					print("Under Construction");
+					print("Stimulus Change Command: " +switchcommand);
+					//rebuild gui settings here to display options that appear when updated
+					//or just re-write radio button function to not include update button
+					//cp.remove
+					//cp.add
+
+					//add check of stimcommand here to see if it actually loaded
+					cp.revalidate();
+					cp.repaint();
+				}
+				if(loadbinning.equals("1x1")){
+					bintype.setSelectedItem(binchoices[0]);
+				}
+				if(loadbinning.equals("2x2")){
+					bintype.setSelectedItem(binchoices[1]);
+				}
+				if(loadbinning.equals("4x4")){
+					bintype.setSelectedItem(binchoices[2]);
+				}
+				if(loadcommand.equals("50,150")){
+					exptype.setSelectedItem(choices[0]);
+				}
+				if(loadcommand.equals("50,100")){
+					exptype.setSelectedItem(choices[1]);
+					print("Hooray");
+				}
+				if(loadcommand.equals("100,200")){
+					exptype.setSelectedItem(choices[2]);
+				}
+				if(!loadcommand.equals("50,150") && !loadcommand.equals("50,100") && !loadcommand.equals("100,200")){
+					global.otherload=1;
+					exptype.setSelectedItem(choices[3]);
+				}
+				
+				command = loadcommand;
+				binning = loadbinning;
+				global.otherload = 0;
+				print("");
+				print("Settings Load Success");
+			}
+	}
+
+//////////////////////////////////////////////////////////////////////////////////
+//RESET VALVE WINDOW
+//////////////////////////////////////////////////////////////////////////////////
+	
+	if (e.getActionCommand() == "Reset Valves"){
+			f3 = new JFrame("Valve Control");
+			f3.setBounds(200,100,733,533);
+			cp3 = f3.getContentPane(); 
+			cp3.setLayout(new MigLayout("ins 20", "[para]0[][1001p,fill][601p][951p,fill]")); 
+			f3.setSize(500, 500);
+			f3.setLocation(800, 500);
+			f3.setResizable(true);
+
+			JButton valve1on = new JButton("Valve 1: ON");
+			JButton valve1off = new JButton("Valve 1: OFF");
+			JButton valve2on = new JButton("Valve 2: ON");
+			JButton valve2off = new JButton ("Valve 2: OFF");
+
+			JButton sendCommand = new JButton ("Send");
+			
+			valve1on.setPreferredSize(new Dimension(95,20));
+			valve1off.setPreferredSize(new Dimension(95,20));
+			valve2on.setPreferredSize(new Dimension(95,20));
+			valve2off.setPreferredSize(new Dimension(95,20));
+
+			sendCommand.setPreferredSize(new Dimension(95,20));
+
+			serialString = new JFormattedTextField("");
+			serialString.setColumns(22);
+
+			valve1on.addActionListener(this);
+			valve1off.addActionListener(this);
+			valve2on.addActionListener(this);
+			valve2off.addActionListener(this);
+			sendCommand.addActionListener(this);
+			
+			cp3.add(valve1on,"cell 0 1");
+			cp3.add(valve1off,"cell 1 1");
+			cp3.add(valve2on,"cell 0 2");
+			cp3.add(valve2off,"cell 1 2, wrap");
+			cp3.add(serialString,"span 2, wrap");
+
+			cp3.add(sendCommand,"wrap");
+
+			f3.pack();
+			f3.show();
+			
+			void actionPerformed(ActionEvent e) { 
+				if(e.getActionCommand() == "Valve 1: ON"){
+						vcommand = "v1on";
+						mmc.setSerialPortCommand(port, vcommand, "/n");
+				}
+				if(e.getActionCommand() == "Valve 1: OFF"){
+						vcommand = "v1off";
+						mmc.setSerialPortCommand(port, vcommand, "/n");
+				}
+				if(e.getActionCommand() == "Valve 2: ON"){
+						vcommand = "v2on";
+						mmc.setSerialPortCommand(port, vcommand, "/n");
+				}
+				if(e.getActionCommand() == "Valve 2: OFF"){
+						vcommand = "v2off";
+						mmc.setSerialPortCommand(port, vcommand, "/n");
+				}	
+				if(e.getActionCommand() == "Send"){
+						String serialtext = serialString.getText();
+						vcommand = serialtext;
+						mmc.setSerialPortCommand(port, vcommand, "/n");
+				}
+			}
+	}
+//////////////////////////////////////////////////////////////////////////////////
+//Apply all settings by writing to a text file to be called by run acquisition
+//////////////////////////////////////////////////////////////////////////////////
+
+	if (e.getActionCommand() == "Apply"){
+		String exposuretext = input.getText();
+		String trigdtext = trigdinput.getText();
+		String trigptext = trigpinput.getText();
+		String trialtext = trialinput.getText();
+		String trialdurationtext = triallengthinput.getText();
+		String trialinttext = trialintinput.getText();
+		String acqtext = fpsinput.getText();
+		String savepathtext =directoryinput.getText();
+		String stiminttext = stimintinput.getText();
+		/////////////////////////////////////////////////////////////////////////////
+		// catch if not all variables are filled in
+		////////////////////////////////////////////////////////////////////////////
+		valid = true;
+		intervalid = true;
+		if(initializex == "Multi-Stimulus"){
+			global.stimchangevalid = false;
+			if(gotcommand == true){
+				stimchangevalid = true;
+			}
+		}
+		
+		try{
+		int acqspeed = Integer.parseInt(acqtext);
+		int trials = Integer.parseInt(trialtext);
+		int trialints = Integer.parseInt(trialinttext);
+		int stimints = Integer.parseInt(stiminttext);
+		int trialduration = Integer.parseInt(trialdurationtext);
+		
+		} catch(r){
+			valid = false;
+		}
+		int checksavepath = savepathtext.length();
+		int checkexposure = exposuretext.length();
+		int checktrigp = trigptext.length();
+		int checktrigd = trigdtext.length();
+		if (checksavepath<1){
+			valid = false;
+		}
+		if (checkexposure<1){
+			valid = false;
+		}
+		if (checktrigp<1){
+			valid = false;
+		}
+		if (checktrigd<1){
+			valid = false;
+		}
+			if(valid == false){
+				JOptionPane.showMessageDialog(null, "Missing required field.", "Error", JOptionPane.ERROR_MESSAGE);
+			}
+	
+		double dtrialdur = Double.parseDouble(trialdurationtext);
+		double dtrialint = Double.parseDouble(trialinttext);
+		double dexposure = Double.parseDouble(exposuretext);
+		
+		//**********************************************************************
+		//CHECK MULTI STIM INTERVAL LENGTH , ADD HERE ISH~
+		//**********************************************************************
+		
+		systemwait = dtrialint-(dtrialdur*(dexposure/1000))-6;
+		
+		if(systemwait<0.5){
+			intervalid = false;
+		}
+		if(intervalid == false){
+				JOptionPane.showMessageDialog(null, "Trial interval does not match trial duration", "Error", JOptionPane.ERROR_MESSAGE);
+		}
+		if(stimchangevalid == false){
+				JOptionPane.showMessageDialog(null, "Missing stimulus change command.", "Error", JOptionPane.ERROR_MESSAGE);
+		}
+		
+			if(valid == true && intervalid == true && stimchangevalid == true){
+				int acqspeed = Integer.parseInt(acqtext);
+				int trials = Integer.parseInt(trialtext);
+				int trialints = Integer.parseInt(trialinttext);
+				int stimints = Integer.parseInt(stiminttext);
+				int trialduration = Integer.parseInt(trialdurationtext);
+
+				
+				//==========================================================================
+				//Write to MicroManager Directory for setting data to be passed to second script
+				//==========================================================================
+				FileWriter fw = new FileWriter("H:/User Defined Acquisition Settings.txt");
+				PrintWriter pw = new PrintWriter(fw);
+				pw.println(initializex);
+				pw.println(exposuretext);
+				pw.println(binning);
+				pw.println(trigptext);
+				pw.println(trigdtext);
+				pw.println(acqspeed);
+				pw.println(trials);
+				pw.println(trialduration);
+				pw.println(trialints);
+				pw.println(savepathtext);
+				pw.println(command);
+				if(initializex=="Single-Stimulus"||initializex=="Multi-Pattern"){
+					switchcommand= "void";
+					stiminttext = "void";	
+				}
+				if(initializex=="Single-Stimulus"||initializex=="Multi-Stimulus"){
+					patterncommand= "void";	
+				}
+				pw.println(switchcommand);     
+				pw.println(stiminttext);
+				pw.println(patterncommand);	
+				pw.close();
+
+				//==========================================================================
+				// Autosave experiment settings to Acquistion folder
+				//==========================================================================
+				
+				cameraName = mmc.getCameraDevice(); 
+				mmc.setProperty(cameraName, "Binning", binning);
+				mmc.setProperty(cameraName, "Exposure", exposuretext);
+				double dtrigd = Double.parseDouble(trigdtext)/1000;
+				double dtrigp = Double.parseDouble(trigptext)/1000;
+				String strigd = String.valueOf(dtrigd);
+				String strigp = String.valueOf(dtrigp);
+				mmc.setProperty(cameraName, "OUTPUT TRIGGER DELAY[0]", strigd); // s
+				mmc.setProperty(cameraName, "OUTPUT TRIGGER PERIOD[0]", strigp); // s
+				mmc.setProperty(cameraName, "OUTPUT TRIGGER KIND[0]", "PROGRAMABLE");
+				mmc.setProperty(cameraName, "OUTPUT TRIGGER POLARITY[0]", "NEGATIVE");
+				// if valid true send variables to run code.
+				gui.clearMessageWindow();
+
+
+
+				//if statement here for multistimulus and multipattern experiment calculation time equations
+				//would multiply current equation by the number of stimulus rows and wells and add waits
+				if(initializex=="Single-Stimulus"){
+				Double totalxtime = (((dtrialdur*(dexposure/1000))+systemwait)*trials)/60;
+
+				Double totalxtimedec = totalxtime * 10;
+				totalxtimedec = Math.round(totalxtimedec);
+				global.totalxtimedec = totalxtimedec / 10;
+					if(trials ==1){
+						global.totalxtimedec = (dtrialdur*(dexposure/1000))/60;
+						//SET TRIAL INTERVAL TEXT TO ONE AS IT IS NOT BEING USED FOR 1 TRIAL
+					}
+				}
+				if(initializex== "Multi-Stimulus"){
+					global.totalxtimedec = "0.0";
+				}
+				if(initializex== "Multi-Pattern"){
+					global.totalxtimedec = "0.0";
+				}
+
+				
+				f4 = new JFrame("Review Experiment");
+				f4.setBounds(200,100,200,200);
+
+
+				cp4 = f4.getContentPane(); 
+				cp4.setLayout(new MigLayout()); 
+
+				f4.setSize(200, 500);
+				f4.setLocation(750, 300);
+				f4.setResizable(false);
+
+				textArea = new JTextArea(20, 40);
+				textArea.setEditable(false);
+				//SUMMARY WINDOW PRINT SETTINGS
+				
+				textArea.setText("Experiment Type: "+initializex+"\nExposure: " 
+				+exposuretext+"\nBinning: " + binning+"\nTrigger Period: "+trigptext
+				+"\nTrigger Delay: "+trigdtext+"\nAcq. Speed: "+acqspeed+"\nTrials: "+trials
+				+"\nTrial Duration: "+trialduration+"\nTrial Interval: "+trialints+
+				"\nSave Dir: "+savepathtext+"\n\nSwitch Command: "+switchcommand+ 
+				"\nStimulus Interval: "+stiminttext+"\nPattern Command: "+patterncommand+"\n\n"
+				+"TOTAL TIME: "+totalxtimedec+" minutes"+"\nSelect MM, Press 'r' to run");
+
+				///////////////////////////////
+				
+				JLabel = summarylbl = new JLabel("Settings Summary");
+				summarylbl.setForeground(Color.BLUE);
+				summarylbl.setFont(new Font("Serif",Font.BOLD,14));
+				cp4.add(summarylbl, "gapbottom 1, span, split 2, aligny center");
+				cp4.add(new JSeparator(),"gapleft rel,growx");
+				cp4.add(textArea);
+				JScrollPane scroll = new JScrollPane (textArea, 
+   			JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+
+				cp4.add(scroll);
+
+				f4.pack(); 
+				f4.show();
+				
+				print("SUMMARY");
+				print("ExpType: " +initializex);
+				print("Exposure: "+exposuretext);
+				print("Binning: "+ binning);
+				print("TriggerPeriod: " + trigptext);
+				print("TriggerDelay: " + trigdtext);
+				print("Acq.Speed: " +acqspeed);
+				print("ExperimentTrials: " +trials);
+				print("Trial Duration: " +trialduration);
+				print("TrialInt: "+trialints);
+				print("SaveDIR: "+ savepathtext);
+				print("");
+				print("Switch Cmd: "+switchcommand);
+				print("Stimulus Interval: " +stiminttext);
+				print("PatternPath: "+patterncommand);
+				//f.dispose();
+		}
+	}
+}
