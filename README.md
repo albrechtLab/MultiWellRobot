@@ -1,5 +1,5 @@
 # File configuration steps
-Published MicroManager and Arduino Scripts
+MultiWell Robot MicroManager and Arduino Scripts
 
 Recommended steps for independent/modular robot automation:
 
