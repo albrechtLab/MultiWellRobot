@@ -17,3 +17,5 @@ https://github.com/albrechtLab/MicroManager
 
 An interactive heatmap visulization of chemical screen data is also available online, with code in this repo (hmv.tsv, hmv.html):
 http://users.wpi.edu/~rosslagoy/hmv.html
+
+CAD of the multiwell robot is available online: https://grabcad.com/mylibrarymodels
