@@ -14,3 +14,6 @@ Recommended steps for integrated robot with microscopy automation:
 https://create.arduino.cc/editor/rosslagoy/33ba4f04-3064-49b6-8265-8dfdec810b8c
 2. Follow README.md steps at (below) to set up MicroManager (.bsh) scripts:
 https://github.com/albrechtLab/MicroManager
+
+An interactive heatmap visulization of chemical screen data is also available online, with code in this repo (hmv.tsv, hmv.html):
+http://users.wpi.edu/~rosslagoy/hmv.html
