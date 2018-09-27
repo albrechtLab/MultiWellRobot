@@ -16,6 +16,11 @@ https://create.arduino.cc/editor/rosslagoy/33ba4f04-3064-49b6-8265-8dfdec810b8c
 https://github.com/albrechtLab/MicroManager
 
 An interactive heatmap visulization of chemical screen data is also available online, with code in this repo (hmv.tsv, hmv.html):
-http://users.wpi.edu/~rosslagoy/hmv.html
+http://www.rosslagoy.com/hmv.html
 
-CAD of the multiwell robot is available online: https://grabcad.com/mylibrarymodels
+CAD of the multiwell robot (Fig. 1, Supp. Fig. 1) will be made available online.
+
+Reference:
+Lagoy, R.C., Albrecht, D.R. (2018). “Automated fluid delivery from multiwell plates to microfluidic devices for high-throughput experiments and microscopy.” Scientific Reports. 8, 6217. doi:10.1038/s41598-018-24504-x
+
+https://www.nature.com/articles/s41598-018-24504-x
